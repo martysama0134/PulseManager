@@ -32,7 +32,6 @@ PulseManager::DurationT TestArray[TEST_MAX]{};
 PulseManager::DurationT GetTest(eTest key2) {
 	if (key2 >= TEST_MAX)
 		return PulseManager::TypeClock::duration::zero();
-
 	return TestArray[key2];
 }
 
@@ -98,7 +97,6 @@ public:
 		return _this;
 	}
 
-	/* CLOCK BLOCK */
 	DurationT GetClock(MainKeyT key1, SubKeyT key2) {
 		auto it1 = clockMap.find(key1);
 		if (it1 == clockMap.end())
@@ -106,7 +104,6 @@ public:
 		auto it2 = it1->second.find(key2);
 		if (it2 == it1->second.end())
 			return TypeClock::duration::zero();
-
 		return it2->second;
 	}
 

@@ -129,6 +129,23 @@ public:
 	DurationT DiffClock(MainKeyT key1, SubKeyT key2) {
 		return GetClock(key1, key2) - GetChrono();
 	}
+
+	void ClearClock(MainKeyT key1) {
+		auto it1 = clockMap.find(key1);
+		if (it1 == clockMap.end())
+			return;
+		clockMap.erase(it1);
+	}
+
+	void ClearClock(MainKeyT key1, SubKeyT key2) {
+		auto it1 = clockMap.find(key1);
+		if (it1 == clockMap.end())
+			return;
+		auto it2 = it1->second.find(key2);
+		if (it2 == it1->second.end())
+			return;
+		it1->second.erase(it2);
+	}
 #endif
 
 #ifdef __PULSEMANAGER__M2_SUPPORT__
