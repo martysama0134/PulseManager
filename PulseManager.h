@@ -9,6 +9,12 @@
 #include <unordered_map>
 #include <chrono>
 
+enum class ePulse {
+	GuildComment,
+	CommandRequest,
+	FriendRequest,
+};
+
 // #define __PULSEMANAGER__SECOND_SUPPORT__
  #define __PULSEMANAGER__CLOCK_SUPPORT__
 // #define __PULSEMANAGER__M2_SUPPORT__
@@ -22,7 +28,7 @@
 class PulseManager
 {
 public:
-	using SubKeyT = std::string;
+	using SubKeyT = ePulse;
 	using MainKeyT = int;
 
 #ifdef __PULSEMANAGER__M2_SUPPORT__
@@ -108,8 +114,14 @@ public:
 		clockMap[key1][key2] = value;
 	}
 
-	bool CheckClock(MainKeyT key1, SubKeyT key2, DurationT nextLapse) {
+	bool CheckClock(MainKeyT key1, SubKeyT key2) {
 		if (GetClock(key1, key2) > GetChrono())
+			return false;
+		return true;
+	}
+
+	bool IncreaseClock(MainKeyT key1, SubKeyT key2, DurationT nextLapse) {
+		if (!CheckClock(key1, key2))
 			return false;
 		SetClock(key1, key2, nextLapse, true);
 		return true;
@@ -170,6 +182,7 @@ public:
 		SetPulse(key1, key2, nextLapse, true);
 		return true;
 	}
+
 	SecondT GetPSecond(MainKeyT key1, SubKeyT key2) {
 		auto v = GetPulse(key1, key2);
 		return Pulse2Sec(v);
