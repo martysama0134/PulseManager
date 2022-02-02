@@ -13,3 +13,12 @@ if (!PulseManager::Instance().CheckClock(ch->GetPlayerID(), "GuildComment", std:
     return;
 }
 ```
+
+Or shorter:
+
+```cpp
+if (!PulseManager::Instance().CheckClock(ch->GetPlayerID(), "GuildComment", std::chrono::milliseconds(1500))) {
+    ch->ChatPacket(CHAT_TYPE_INFO, "Remaining time: %.2f", PULSEMANAGER_CLOCK_TO_SEC2(ch->GetPlayerID(), "GuildComment"));
+    return;
+}
+```
