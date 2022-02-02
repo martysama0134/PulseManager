@@ -9,10 +9,14 @@
 #include <unordered_map>
 #include <chrono>
 
+// #define __PULSEMANAGER__SECOND_SUPPORT__
+ #define __PULSEMANAGER__CLOCK_SUPPORT__
 // #define __PULSEMANAGER__M2_SUPPORT__
 #ifdef __PULSEMANAGER__M2_SUPPORT__
 #include "../libthecore/include/stdafx.h"
 #endif
+
+#define PULSEMANAGER_CLOCK_TO_SEC(smth) (std::chrono::duration_cast<std::chrono::milliseconds>(smth).count()/1000.0)
 
 class PulseManager
 {
@@ -28,30 +32,92 @@ public:
 	MainPulseMapT pulseMap;
 #endif
 
+#ifdef __PULSEMANAGER__SECOND_SUPPORT__
 	using SecondT = time_t;//uint32_t;
 	using SecondMapT = std::unordered_map<SubKeyT, SecondT>;
 	using MainSecondMapT = std::unordered_map<MainKeyT, SecondMapT>;
 	MainSecondMapT secondMap;
+#endif
 
+#ifdef __PULSEMANAGER__CLOCK_SUPPORT__
 	using TypeClock = std::chrono::high_resolution_clock;
 	using ClockT = TypeClock::time_point;
 	using DurationT = TypeClock::duration;
 	using ClockMapT = std::unordered_map<SubKeyT, DurationT>;
 	using MainClockMapT = std::unordered_map<MainKeyT, ClockMapT>;
 	MainClockMapT clockMap;
+#endif
 
 	static PulseManager& Instance() {
 		thread_local PulseManager _this;
 		return _this;
 	}
 
+#ifdef __PULSEMANAGER__SECOND_SUPPORT__
 	SecondT GetTime() {
 		return time(0); //get_global_time();//get_dword_time();
 	}
 
+	/* SECOND BLOCK */
+	SecondT GetSecond(MainKeyT key1, SubKeyT key2) {
+		auto it1 = secondMap.find(key1);
+		if (it1 == secondMap.end())
+			return 0;
+		auto it2 = it1->second.find(key2);
+		if (it2 == it1->second.end())
+			return 0;
+
+		return it2->second;
+	}
+
+	void SetSecond(MainKeyT key1, SubKeyT key2, SecondT value, bool appendCurrent = true) {
+		if (appendCurrent)
+			value += GetTime();
+		secondMap[key1][key2] = value;
+	}
+
+	bool CheckSecond(MainKeyT key1, SubKeyT key2, SecondT nextLapse) {
+		if (GetSecond(key1, key2) > GetTime())
+			return false;
+		SetSecond(key1, key2, nextLapse, true);
+		return true;
+	}
+#endif
+
+#ifdef __PULSEMANAGER__CLOCK_SUPPORT__
 	DurationT GetChrono() {
 		return std::chrono::high_resolution_clock::now().time_since_epoch();
 	}
+
+	/* CLOCK BLOCK */
+	DurationT GetClock(MainKeyT key1, SubKeyT key2) {
+		auto it1 = clockMap.find(key1);
+		if (it1 == clockMap.end())
+			return TypeClock::duration::zero();
+		auto it2 = it1->second.find(key2);
+		if (it2 == it1->second.end())
+			return TypeClock::duration::zero();
+
+		return it2->second;
+	}
+
+	void SetClock(MainKeyT key1, SubKeyT key2, DurationT value, bool appendCurrent = true) {
+		if (appendCurrent)
+			value += GetChrono();
+		clockMap[key1][key2] = value;
+	}
+
+	bool CheckClock(MainKeyT key1, SubKeyT key2, DurationT nextLapse) {
+		if (GetClock(key1, key2) > GetChrono())
+			return false;
+		SetClock(key1, key2, nextLapse, true);
+		return true;
+	}
+
+	DurationT DiffClock(MainKeyT key1, SubKeyT key2) {
+		return GetClock(key1, key2) - GetChrono();
+	}
+#endif
 
 #ifdef __PULSEMANAGER__M2_SUPPORT__
 	void SetPassesPerSec(PulseT v) {
@@ -116,58 +182,5 @@ public:
 	}
 #endif
 
-	/* SECOND BLOCK */
-	SecondT GetSecond(MainKeyT key1, SubKeyT key2) {
-		auto it1 = secondMap.find(key1);
-		if (it1 == secondMap.end())
-			return 0;
-		auto it2 = it1->second.find(key2);
-		if (it2 == it1->second.end())
-			return 0;
-
-		return it2->second;
-	}
-
-	void SetSecond(MainKeyT key1, SubKeyT key2, SecondT value, bool appendCurrent = true) {
-		if (appendCurrent)
-			value += GetTime();
-		secondMap[key1][key2] = value;
-	}
-
-	bool CheckSecond(MainKeyT key1, SubKeyT key2, SecondT nextLapse) {
-		if (GetSecond(key1, key2) > GetTime())
-			return false;
-		SetSecond(key1, key2, nextLapse, true);
-		return true;
-	}
-
-	/* CLOCK BLOCK */
-	DurationT GetClock(MainKeyT key1, SubKeyT key2) {
-		auto it1 = clockMap.find(key1);
-		if (it1 == clockMap.end())
-			return TypeClock::duration::zero();
-		auto it2 = it1->second.find(key2);
-		if (it2 == it1->second.end())
-			return TypeClock::duration::zero();
-
-		return it2->second;
-	}
-
-	void SetClock(MainKeyT key1, SubKeyT key2, DurationT value, bool appendCurrent = true) {
-		if (appendCurrent)
-			value += GetChrono();
-		clockMap[key1][key2] = value;
-	}
-
-	bool CheckClock(MainKeyT key1, SubKeyT key2, DurationT nextLapse) {
-		if (GetClock(key1, key2) > GetChrono())
-			return false;
-		SetClock(key1, key2, nextLapse, true);
-		return true;
-	}
-
-	DurationT DiffClock(MainKeyT key1, SubKeyT key2) {
-		return std::chrono::duration_cast<std::chrono::milliseconds>(GetClock(key1, key2) - GetChrono());
-	}
 };
 #endif // __COMMON__PULSEMANAGER_H__
