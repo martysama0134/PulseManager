@@ -23,7 +23,7 @@ class PulseManager
 {
 public:
 	using SubKeyT = std::string;
-	using MainKeyT = int;
+	using MainKeyT = uint32_t;
 
 #ifdef __PULSEMANAGER__M2_SUPPORT__
 	using PulseT = int;
