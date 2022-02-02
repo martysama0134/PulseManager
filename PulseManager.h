@@ -61,7 +61,7 @@ public:
 	}
 
 #ifdef __PULSEMANAGER__SECOND_SUPPORT__
-	SecondT GetTime() {
+	inline static SecondT GetTime() {
 		return time(0); //get_global_time();//get_dword_time();
 	}
 
@@ -92,7 +92,7 @@ public:
 #endif
 
 #ifdef __PULSEMANAGER__CLOCK_SUPPORT__
-	DurationT GetChrono() {
+	inline static DurationT GetChrono() {
 		return std::chrono::high_resolution_clock::now().time_since_epoch();
 	}
 
@@ -145,7 +145,7 @@ public:
 		return v / passesPerSec;
 	}
 
-	PulseT GetCorePulse() {
+	inline static PulseT GetCorePulse() {
 		return thecore_pulse();
 	}
 
