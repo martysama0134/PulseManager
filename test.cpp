@@ -151,12 +151,8 @@ void benchPulseString() {
 	std::cout << ms_double.count() << "ms\n";
 }
 
-int main() {
-	auto & pm = PulseManager::Instance();
-	benchPulseManager();
-	benchNormalArray();
-	benchPulseString();
-
+void promptTest() {
+	auto& pm = PulseManager::Instance();
 	while (true) {
 		system("pause");
 
@@ -173,10 +169,18 @@ int main() {
 			std::cout << "CLOCK HIT " << pm.GetClock(123, ePulse::GuildComment).count() << std::endl;
 		else
 			std::cout << "CLOCK NOT HIT " << PULSEMANAGER_CLOCK_TO_SEC2(123, ePulse::GuildComment) << std::endl;
-			//std::cout << "CLOCK NOT HIT " << PULSEMANAGER_CLOCK_TO_SEC(pm.DiffClock(123, "kek")) << std::endl;
-			//std::cout << "CLOCK NOT HIT " << pm.DiffClock(123, "kek").count() << std::endl;
-			//std::cout << "CLOCK NOT HIT " << std::chrono::duration_cast<std::chrono::milliseconds>(pm.DiffClock(123, "kek")).count() << std::endl;
+		//std::cout << "CLOCK NOT HIT " << PULSEMANAGER_CLOCK_TO_SEC(pm.DiffClock(123, "kek")) << std::endl;
+		//std::cout << "CLOCK NOT HIT " << pm.DiffClock(123, "kek").count() << std::endl;
+		//std::cout << "CLOCK NOT HIT " << std::chrono::duration_cast<std::chrono::milliseconds>(pm.DiffClock(123, "kek")).count() << std::endl;
 #endif
 	}
+}
+
+int main() {
+	benchPulseManager();
+	benchNormalArray();
+	benchPulseString();
+
+	promptTest();
 	return 0;
 }
