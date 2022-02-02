@@ -16,7 +16,8 @@
 #include "../libthecore/include/stdafx.h"
 #endif
 
-#define PULSEMANAGER_CLOCK_TO_SEC(smth) (std::chrono::duration_cast<std::chrono::milliseconds>(smth).count()/1000.0)
+#define PULSEMANAGER_CLOCK_TO_SEC(diff) (std::chrono::duration_cast<std::chrono::milliseconds>(diff).count()/1000.0)
+#define PULSEMANAGER_CLOCK_TO_SEC2(key1, key2) (PULSEMANAGER_CLOCK_TO_SEC(PulseManager::Instance().DiffClock(key1, key2)))
 
 class PulseManager
 {
