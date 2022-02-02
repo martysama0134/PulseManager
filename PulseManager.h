@@ -23,7 +23,11 @@ class PulseManager
 {
 public:
 	using SubKeyT = std::string;
+#ifdef __PULSEMANAGER__M2_SUPPORT__
+	using MainKeyT = unsigned long;
+#else
 	using MainKeyT = int;
+#endif
 
 #ifdef __PULSEMANAGER__M2_SUPPORT__
 	using PulseT = int;
