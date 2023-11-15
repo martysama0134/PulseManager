@@ -151,7 +151,7 @@ void benchPulseString() {
 	std::cout << ms_double.count() << "ms\n";
 }
 
-void promptTest() {
+void promptClockTest() {
 	auto& pm = PulseManager::Instance();
 	while (true) {
 		system("pause");
@@ -168,7 +168,9 @@ void promptTest() {
 		if (pm.IncreaseClock(123, ePulse::GuildComment, std::chrono::milliseconds(3000)))
 			std::cout << "CLOCK HIT " << pm.GetClock(123, ePulse::GuildComment).count() << std::endl;
 		else
-			std::cout << "CLOCK NOT HIT " << PULSEMANAGER_CLOCK_TO_SEC2(123, ePulse::GuildComment) << std::endl;
+			std::cout << "CLOCK NOT HIT" << std::endl;
+		std::cout << " REMAINING TIME " << PULSEMANAGER_CLOCK_TO_SEC2(123, ePulse::GuildComment) << std::endl;
+		//std::cout << " REMAINING COUNT " << pm.GetCount(123, ePulse::GuildComment) << std::endl;
 		//std::cout << "CLOCK NOT HIT " << PULSEMANAGER_CLOCK_TO_SEC(pm.DiffClock(123, "kek")) << std::endl;
 		//std::cout << "CLOCK NOT HIT " << pm.DiffClock(123, "kek").count() << std::endl;
 		//std::cout << "CLOCK NOT HIT " << std::chrono::duration_cast<std::chrono::milliseconds>(pm.DiffClock(123, "kek")).count() << std::endl;
@@ -176,11 +178,29 @@ void promptTest() {
 	}
 }
 
-int main() {
-	benchPulseManager();
-	benchNormalArray();
-	benchPulseString();
 
-	promptTest();
+void promptCountTest() {
+	auto& pm = PulseManager::Instance();
+	while (true) {
+		system("pause");
+
+#ifdef __PULSEMANAGER__CLOCK_SUPPORT__
+		if (pm.IncreaseCount(123, ePulse::GuildComment, std::chrono::milliseconds(3000), 5))
+			std::cout << "COUNT HIT " << pm.GetClock(123, ePulse::GuildComment).count() << " AND TRIES " << pm.GetCount(123, ePulse::GuildComment) << std::endl;
+		else
+			std::cout << "COUNT NOT HIT" << std::endl;
+		std::cout << " REMAINING TIME " << PULSEMANAGER_CLOCK_TO_SEC2(123, ePulse::GuildComment) << std::endl;
+		std::cout << " REMAINING COUNT " << pm.GetCount(123, ePulse::GuildComment) << std::endl;
+#endif
+	}
+}
+
+int main() {
+	//benchPulseManager();
+	//benchNormalArray();
+	//benchPulseString();
+
+	promptClockTest();
+	//promptCountTest();
 	return 0;
 }

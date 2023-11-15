@@ -11,12 +11,19 @@
 enum class ePulse {
 	GuildComment,
 	CommandRequest,
-	FriendRequest,
+	ItemDrop,
+	BoxOpening,
+	BuySell,
+	SafeboxMove,
+	ChannelStatus,
+	RideMount,
+	SharedRequest,
 };
 
 // #define __PULSEMANAGER__SECOND_SUPPORT__
- #define __PULSEMANAGER__CLOCK_SUPPORT__
+#define __PULSEMANAGER__CLOCK_SUPPORT__
 // #define __PULSEMANAGER__M2_SUPPORT__
+
 #ifdef __PULSEMANAGER__M2_SUPPORT__
 #include "../libthecore/include/stdafx.h"
 #endif
@@ -49,7 +56,9 @@ public:
 	using TypeClock = std::chrono::high_resolution_clock;
 	using ClockT = TypeClock::time_point;
 	using DurationT = TypeClock::duration;
-	using ClockMapT = std::unordered_map<SubKeyT, DurationT>;
+	using CountT = int64_t;
+	using PairValueT = std::pair<DurationT, CountT>;
+	using ClockMapT = std::unordered_map<SubKeyT, PairValueT>;
 	using MainClockMapT = std::unordered_map<MainKeyT, ClockMapT>;
 	MainClockMapT clockMap;
 #endif
@@ -96,21 +105,43 @@ public:
 	}
 
 	/* CLOCK BLOCK */
-	DurationT GetClock(MainKeyT key1, SubKeyT key2) {
-		auto it1 = clockMap.find(key1);
+	PairValueT GetPair(MainKeyT key1, SubKeyT key2) const {
+		const auto it1 = clockMap.find(key1);
 		if (it1 == clockMap.end())
-			return TypeClock::duration::zero();
-		auto it2 = it1->second.find(key2);
+			return {TypeClock::duration::zero(), 0};
+
+		const auto it2 = it1->second.find(key2);
 		if (it2 == it1->second.end())
-			return TypeClock::duration::zero();
+			return {TypeClock::duration::zero(), 0};
 
 		return it2->second;
+	}
+
+	DurationT GetClock(MainKeyT key1, SubKeyT key2) const {
+		return GetPair(key1, key2).first;
+	}
+
+	CountT GetCount(MainKeyT key1, SubKeyT key2) const {
+		return GetPair(key1, key2).second;
+	}
+	
+	void SetPair(MainKeyT key1, SubKeyT key2, PairValueT pair, bool appendCurrent = true) {
+		if (appendCurrent)
+			pair.first += GetChrono();
+		clockMap[key1][key2] = pair;
 	}
 
 	void SetClock(MainKeyT key1, SubKeyT key2, DurationT value, bool appendCurrent = true) {
 		if (appendCurrent)
 			value += GetChrono();
-		clockMap[key1][key2] = value;
+		clockMap[key1][key2].first = value;
+	}
+
+	void SetCount(MainKeyT key1, SubKeyT key2, CountT count, bool decreaseValue = true) {
+		if (decreaseValue)
+			clockMap[key1][key2].second -= count;
+		else
+			clockMap[key1][key2].second = count;
 	}
 
 	bool CheckClock(MainKeyT key1, SubKeyT key2) {
@@ -123,6 +154,24 @@ public:
 		if (!CheckClock(key1, key2))
 			return false;
 		SetClock(key1, key2, nextLapse, true);
+		return true;
+	}
+
+	bool CheckCount(MainKeyT key1, SubKeyT key2) {
+		//std::cout << "CHECK COUNT " << GetCount(key1, key2) << std::endl;
+		SetCount(key1, key2, 1, true);
+		if (GetCount(key1, key2) <= 0)
+			return false;
+		return true;
+	}
+
+	bool IncreaseCount(MainKeyT key1, SubKeyT key2, DurationT nextLapse, CountT maxCount) {
+		if (!CheckClock(key1, key2)) { // if clock fails, check if max count is reached
+			if (!CheckCount(key1, key2))
+				return false;
+			return true;
+		}
+		SetPair(key1, key2, { nextLapse, maxCount }, true);
 		return true;
 	}
 
