@@ -20,6 +20,10 @@ jobs:
             name: GCC
             build: g++ -std=c++20 -O2 -Wall -Wextra -Werror -o test_runner test.cpp
             run: ./test_runner
+          - os: ubuntu-latest
+            name: Clang
+            build: clang++ -std=c++20 -O2 -Wall -Wextra -Werror -o test_runner test.cpp
+            run: ./test_runner
 
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
