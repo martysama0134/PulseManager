@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [enumtype]
+    branches: [main]
   pull_request:
-    branches: [enumtype]
+    branches: [main]
 
 jobs:
   build:
