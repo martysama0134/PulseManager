@@ -1,265 +1,198 @@
-// martysama0134's PulseManager class for quick anti-flood code implementation
-#ifndef __COMMON__PULSEMANAGER_H__
-#define __COMMON__PULSEMANAGER_H__
+// PulseManager — Header-only C++20 rate-limiter
+// https://github.com/martysama0134/PulseManager
+// SPDX-License-Identifier: MIT
+
+#ifndef PULSEMANAGER_H
+#define PULSEMANAGER_H
 #pragma once
 
-#include <cstdint>
-#include <ctime>
-#include <unordered_map>
-#include <chrono>
-
-enum class ePulse {
-	GuildComment,
-	CommandRequest,
-	ItemDrop,
-	BoxOpening,
-	BuySell,
-	SafeboxMove,
-	ChannelStatus,
-	RideMount,
-	SharedRequest,
-};
-
-// #define __PULSEMANAGER__SECOND_SUPPORT__
-#define __PULSEMANAGER__CLOCK_SUPPORT__
-// #define __PULSEMANAGER__M2_SUPPORT__
-
-#ifdef __PULSEMANAGER__M2_SUPPORT__
-#include "../libthecore/include/stdafx.h"
+#if __cplusplus < 202002L && (!defined(_MSVC_LANG) || _MSVC_LANG < 202002L)
+	#error "PulseManager requires C++20 or later."
 #endif
 
-#define PULSEMANAGER_CLOCK_TO_SEC(diff) (std::chrono::duration_cast<std::chrono::milliseconds>(diff).count()/1000.0)
-#define PULSEMANAGER_CLOCK_TO_SEC2(key1, key2) (PULSEMANAGER_CLOCK_TO_SEC(PulseManager::Instance().DiffClock(key1, key2)))
+#include <chrono>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <unordered_map>
 
+namespace pulse {
+
+// Key types must be usable as unordered_map keys.
+template <typename T>
+concept HashableKey = std::equality_comparable<T> && requires(T v) {
+	{ std::hash<T>{}(v) } -> std::convertible_to<std::size_t>;
+};
+
+/// Thread-local singleton rate-limiter.
+///
+/// Tracks per-entity cooldowns and burst counters using a two-level
+/// unordered_map keyed by (MainKey, SubKey).  Each entry stores a
+/// deadline time-point and an optional attempt counter.
+///
+/// Thread safety: Instance() returns a thread_local singleton — each
+/// thread owns independent state with no locking required.
+template <HashableKey SubKeyT, HashableKey MainKeyT = uint32_t>
 class PulseManager
 {
 public:
-	using SubKeyT = ePulse;
-	using MainKeyT = uint32_t;
+	using Clock     = std::chrono::steady_clock;
+	using TimePoint = Clock::time_point;
+	using Duration  = Clock::duration;
+	using Count     = int64_t;
 
-#ifdef __PULSEMANAGER__M2_SUPPORT__
-	using PulseT = int;
-	using PulseMapT = std::unordered_map<SubKeyT, PulseT>;
-	using MainPulseMapT = std::unordered_map<MainKeyT, PulseMapT>;
-	PulseT passesPerSec{ 25 };
-	MainPulseMapT pulseMap;
-#endif
-
-#ifdef __PULSEMANAGER__SECOND_SUPPORT__
-	using SecondT = time_t;//uint32_t;
-	using SecondMapT = std::unordered_map<SubKeyT, SecondT>;
-	using MainSecondMapT = std::unordered_map<MainKeyT, SecondMapT>;
-	MainSecondMapT secondMap;
-#endif
-
-#ifdef __PULSEMANAGER__CLOCK_SUPPORT__
-	using TypeClock = std::chrono::high_resolution_clock;
-	using ClockT = TypeClock::time_point;
-	using DurationT = TypeClock::duration;
-	using CountT = int64_t;
-	using PairValueT = std::pair<DurationT, CountT>;
-	using ClockMapT = std::unordered_map<SubKeyT, PairValueT>;
-	using MainClockMapT = std::unordered_map<MainKeyT, ClockMapT>;
-	MainClockMapT clockMap;
-#endif
-
-	static PulseManager& Instance() {
-		thread_local PulseManager _this;
-		return _this;
+	/// Returns the thread-local singleton.
+	static PulseManager& Instance() noexcept
+	{
+		thread_local PulseManager instance;
+		return instance;
 	}
 
-#ifdef __PULSEMANAGER__SECOND_SUPPORT__
-	inline static SecondT GetTime() {
-		return time(0); //get_global_time();//get_dword_time();
+	// ── Clock-based rate limiting ──────────────────────────────
+
+	/// Returns true if the cooldown for (key, action) has expired or was never set.
+	[[nodiscard]] bool CheckClock(MainKeyT key, SubKeyT action) const
+	{
+		return Deadline(key, action) <= Clock::now();
 	}
 
-	/* SECOND BLOCK */
-	SecondT GetSecond(MainKeyT key1, SubKeyT key2) {
-		auto it1 = secondMap.find(key1);
-		if (it1 == secondMap.end())
-			return 0;
-		auto it2 = it1->second.find(key2);
-		if (it2 == it1->second.end())
-			return 0;
-
-		return it2->second;
-	}
-
-	void SetSecond(MainKeyT key1, SubKeyT key2, SecondT value, bool appendCurrent = true) {
-		if (appendCurrent)
-			value += GetTime();
-		secondMap[key1][key2] = value;
-	}
-
-	bool CheckSecond(MainKeyT key1, SubKeyT key2, SecondT nextLapse) {
-		if (GetSecond(key1, key2) > GetTime())
+	/// Sets a new cooldown if the previous one expired.
+	/// Returns true when the action is allowed, false if still in cooldown.
+	[[nodiscard]] bool IncreaseClock(MainKeyT key, SubKeyT action, Duration cooldown)
+	{
+		if (!CheckClock(key, action))
 			return false;
-		SetSecond(key1, key2, nextLapse, true);
-		return true;
-	}
-#endif
-
-#ifdef __PULSEMANAGER__CLOCK_SUPPORT__
-	inline static DurationT GetChrono() {
-		return std::chrono::high_resolution_clock::now().time_since_epoch();
-	}
-
-	/* CLOCK BLOCK */
-	PairValueT GetPair(MainKeyT key1, SubKeyT key2) const {
-		const auto it1 = clockMap.find(key1);
-		if (it1 == clockMap.end())
-			return {TypeClock::duration::zero(), 0};
-
-		const auto it2 = it1->second.find(key2);
-		if (it2 == it1->second.end())
-			return {TypeClock::duration::zero(), 0};
-
-		return it2->second;
-	}
-
-	DurationT GetClock(MainKeyT key1, SubKeyT key2) const {
-		return GetPair(key1, key2).first;
-	}
-
-	CountT GetCount(MainKeyT key1, SubKeyT key2) const {
-		return GetPair(key1, key2).second;
-	}
-	
-	void SetPair(MainKeyT key1, SubKeyT key2, PairValueT pair, bool appendCurrent = true) {
-		if (appendCurrent)
-			pair.first += GetChrono();
-		clockMap[key1][key2] = pair;
-	}
-
-	void SetClock(MainKeyT key1, SubKeyT key2, DurationT value, bool appendCurrent = true) {
-		if (appendCurrent)
-			value += GetChrono();
-		clockMap[key1][key2].first = value;
-	}
-
-	void SetCount(MainKeyT key1, SubKeyT key2, CountT count, bool decreaseValue = true) {
-		if (decreaseValue)
-			clockMap[key1][key2].second -= count;
-		else
-			clockMap[key1][key2].second = count;
-	}
-
-	bool CheckClock(MainKeyT key1, SubKeyT key2) {
-		if (GetClock(key1, key2) > GetChrono())
-			return false;
+		entries_[key][action].deadline = Clock::now() + cooldown;
 		return true;
 	}
 
-	bool IncreaseClock(MainKeyT key1, SubKeyT key2, DurationT nextLapse) {
-		if (!CheckClock(key1, key2))
-			return false;
-		SetClock(key1, key2, nextLapse, true);
-		return true;
+	/// Remaining cooldown duration (negative or zero when expired).
+	[[nodiscard]] Duration RemainingTime(MainKeyT key, SubKeyT action) const
+	{
+		return Deadline(key, action) - Clock::now();
 	}
 
-	bool CheckCount(MainKeyT key1, SubKeyT key2) {
-		//std::cout << "CHECK COUNT " << GetCount(key1, key2) << std::endl;
-		SetCount(key1, key2, 1, true);
-		if (GetCount(key1, key2) <= 0)
-			return false;
-		return true;
+	/// Remaining cooldown as floating-point seconds.
+	[[nodiscard]] double RemainingSeconds(MainKeyT key, SubKeyT action) const
+	{
+		using Sec = std::chrono::duration<double>;
+		return std::chrono::duration_cast<Sec>(RemainingTime(key, action)).count();
 	}
 
-	bool IncreaseCount(MainKeyT key1, SubKeyT key2, DurationT nextLapse, CountT maxCount) {
-		if (!CheckClock(key1, key2)) { // if clock fails, check if max count is reached
-			if (!CheckCount(key1, key2))
+	// ── Count-based burst limiting ─────────────────────────────
+
+	/// Allows up to maxCount actions within a time window.
+	/// Returns true if the action is allowed, false when the burst limit is hit.
+	/// Resets both the window and counter once the window expires.
+	[[nodiscard]] bool IncreaseCount(MainKeyT key, SubKeyT action,
+									 Duration window, Count maxCount)
+	{
+		if (!CheckClock(key, action))
+		{
+			auto& e = entries_[key][action];
+			if (--e.count <= 0)
 				return false;
 			return true;
 		}
-		SetPair(key1, key2, { nextLapse, maxCount }, true);
+		auto& e = entries_[key][action];
+		e.deadline = Clock::now() + window;
+		e.count    = maxCount;
 		return true;
 	}
 
-	DurationT DiffClock(MainKeyT key1, SubKeyT key2) {
-		return GetClock(key1, key2) - GetChrono();
+	/// Returns the remaining burst count for (key, action).
+	[[nodiscard]] Count GetCount(MainKeyT key, SubKeyT action) const
+	{
+		return FindEntry(key, action).count;
 	}
 
-	void ClearClock(MainKeyT key1) {
-		auto it1 = clockMap.find(key1);
-		if (it1 == clockMap.end())
-			return;
-		clockMap.erase(it1);
+	// ── Cleanup ────────────────────────────────────────────────
+
+	/// Removes all entries for a given entity.
+	void Clear(MainKeyT key) { entries_.erase(key); }
+
+	/// Removes a single (key, action) entry.
+	void Clear(MainKeyT key, SubKeyT action)
+	{
+		if (auto it = entries_.find(key); it != entries_.end())
+		{
+			it->second.erase(action);
+			if (it->second.empty())
+				entries_.erase(it);
+		}
 	}
 
-	void ClearClock(MainKeyT key1, SubKeyT key2) {
-		auto it1 = clockMap.find(key1);
-		if (it1 == clockMap.end())
-			return;
-		auto it2 = it1->second.find(key2);
-		if (it2 == it1->second.end())
-			return;
-		it1->second.erase(it2);
-	}
-#endif
+	/// Removes all state.
+	void ClearAll() noexcept { entries_.clear(); }
 
-#ifdef __PULSEMANAGER__M2_SUPPORT__
-	void SetPassesPerSec(PulseT v) {
-		passesPerSec = v;
-	}
-
-	PulseT Sec2Pulse(SecondT v) {
-		return v * passesPerSec;
-	}
-
-	SecondT Pulse2Sec(PulseT v) {
-		return v / passesPerSec;
-	}
-
-	inline static PulseT GetCorePulse() {
-		return thecore_pulse();
+	/// Removes all expired entries. Returns the number removed.
+	std::size_t Sweep()
+	{
+		const auto now = Clock::now();
+		std::size_t removed = 0;
+		for (auto outer = entries_.begin(); outer != entries_.end();)
+		{
+			for (auto inner = outer->second.begin(); inner != outer->second.end();)
+			{
+				if (inner->second.deadline <= now)
+				{
+					inner = outer->second.erase(inner);
+					++removed;
+				}
+				else
+					++inner;
+			}
+			outer = outer->second.empty() ? entries_.erase(outer) : std::next(outer);
+		}
+		return removed;
 	}
 
-	/* CLOCK BLOCK */
-	bool HasPulse(MainKeyT key1, SubKeyT key2) {
-		auto it1 = pulseMap.find(key1);
-		if (it1 == pulseMap.end())
-			return false;
-		auto it2 = it1->second.find(key2);
-		if (it2 == it1->second.end())
-			return false;
-		return true;
+	// ── Diagnostics ────────────────────────────────────────────
+
+	/// Number of tracked entities (unique MainKeys).
+	[[nodiscard]] std::size_t Size() const noexcept { return entries_.size(); }
+
+	/// True if no entries are tracked.
+	[[nodiscard]] bool Empty() const noexcept { return entries_.empty(); }
+
+	/// Total number of (key, action) entries across all entities.
+	[[nodiscard]] std::size_t EntryCount() const noexcept
+	{
+		std::size_t n = 0;
+		for (const auto& [_, inner] : entries_)
+			n += inner.size();
+		return n;
 	}
 
-	PulseT GetPulse(MainKeyT key1, SubKeyT key2) {
-		auto it1 = pulseMap.find(key1);
-		if (it1 == pulseMap.end())
-			return 0;
-		auto it2 = it1->second.find(key2);
-		if (it2 == it1->second.end())
-			return 0;
-		return it2->second;
+private:
+	struct Entry
+	{
+		TimePoint deadline{};
+		Count count{0};
+	};
+
+	using InnerMap = std::unordered_map<SubKeyT, Entry>;
+	using OuterMap = std::unordered_map<MainKeyT, InnerMap>;
+	OuterMap entries_;
+
+	[[nodiscard]] TimePoint Deadline(MainKeyT key, SubKeyT action) const
+	{
+		if (auto o = entries_.find(key); o != entries_.end())
+			if (auto i = o->second.find(action); i != o->second.end())
+				return i->second.deadline;
+		return TimePoint{};
 	}
 
-	void SetPulse(MainKeyT key1, SubKeyT key2, PulseT value, bool appendCurrent = true) {
-		if (appendCurrent)
-			value += GetCorePulse();
-		pulseMap[key1][key2] = value;
+	[[nodiscard]] const Entry& FindEntry(MainKeyT key, SubKeyT action) const
+	{
+		static const Entry empty;
+		if (auto o = entries_.find(key); o != entries_.end())
+			if (auto i = o->second.find(action); i != o->second.end())
+				return i->second;
+		return empty;
 	}
-
-	bool CheckPulse(MainKeyT key1, SubKeyT key2, PulseT nextLapse) {
-		if (GetPulse(key1, key2) > GetCorePulse())
-			return false;
-		SetPulse(key1, key2, nextLapse, true);
-		return true;
-	}
-
-	SecondT GetPSecond(MainKeyT key1, SubKeyT key2) {
-		auto v = GetPulse(key1, key2);
-		return Pulse2Sec(v);
-	}
-
-	void SetPSecond(MainKeyT key1, SubKeyT key2, SecondT value, bool appendCurrent = true) {
-		auto pulses = Sec2Pulse(value);
-		// if (appendCurrent)
-		// 	pulses += GetTime();
-		SetPulse(key1, key2, pulses, true);
-	}
-#endif
-
 };
-#endif // __COMMON__PULSEMANAGER_H__
+
+} // namespace pulse
+
+#endif // PULSEMANAGER_H
