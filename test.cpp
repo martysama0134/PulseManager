@@ -262,6 +262,64 @@ void test_uint64_keys()
 	EXPECT(!pm.IncreaseClock(UINT64_MAX, 0, 50ms));
 }
 
+// ── Edge cases ─────────────────────────────────────────────────────
+
+void test_zero_duration_cooldown()
+{
+	auto& pm = PM::Instance();
+	pm.ClearAll();
+	// 0ms cooldown should allow every call
+	EXPECT(pm.IncreaseClock(1, Action::Chat, 0ms));
+	EXPECT(pm.IncreaseClock(1, Action::Chat, 0ms));
+	EXPECT(pm.IncreaseClock(1, Action::Chat, 0ms));
+}
+
+void test_count_max_one()
+{
+	auto& pm = PM::Instance();
+	pm.ClearAll();
+	// maxCount=1: first call sets window, second blocks
+	EXPECT(pm.IncreaseCount(1, Action::Command, 200ms, 1));
+	EXPECT(!pm.IncreaseCount(1, Action::Command, 200ms, 1));
+}
+
+void test_count_max_zero()
+{
+	auto& pm = PM::Instance();
+	pm.ClearAll();
+	// maxCount=0: first call sets window with 0 budget, second blocks immediately
+	EXPECT(pm.IncreaseCount(1, Action::Command, 200ms, 0));
+	EXPECT(!pm.IncreaseCount(1, Action::Command, 200ms, 0));
+}
+
+void test_rapid_blocking()
+{
+	auto& pm = PM::Instance();
+	pm.ClearAll();
+	EXPECT(pm.IncreaseClock(1, Action::Chat, 1s));
+	// Rapid successive calls — all must be blocked
+	for (int i = 0; i < 1000; ++i)
+		EXPECT(!pm.IncreaseClock(1, Action::Chat, 1s));
+}
+
+void test_sweep_empty()
+{
+	auto& pm = PM::Instance();
+	pm.ClearAll();
+	EXPECT(pm.Sweep() == 0);
+	EXPECT(pm.Empty());
+}
+
+void test_remaining_after_clear()
+{
+	auto& pm = PM::Instance();
+	pm.ClearAll();
+	(void)pm.IncreaseClock(1, Action::Chat, 500ms);
+	EXPECT(pm.RemainingSeconds(1, Action::Chat) > 0.0);
+	pm.Clear(1);
+	EXPECT(pm.RemainingSeconds(1, Action::Chat) <= 0.0);
+}
+
 // ── Benchmarks ─────────────────────────────────────────────────────
 
 static constexpr int BenchIterations = 10'000'000;
@@ -332,6 +390,14 @@ int main()
 
 	std::puts("\n[diagnostics]");
 	RUN(test_size_and_entry_count);
+
+	std::puts("\n[edge cases]");
+	RUN(test_zero_duration_cooldown);
+	RUN(test_count_max_one);
+	RUN(test_count_max_zero);
+	RUN(test_rapid_blocking);
+	RUN(test_sweep_empty);
+	RUN(test_remaining_after_clear);
 
 	std::puts("\n[template variants]");
 	RUN(test_int_keys);

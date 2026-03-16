@@ -1,5 +1,7 @@
 # PulseManager
 
+[![CI](https://github.com/martysama0134/PulseManager/actions/workflows/ci.yml/badge.svg)](https://github.com/martysama0134/PulseManager/actions/workflows/ci.yml)
+
 A header-only C++20 rate-limiter for anti-flood and cooldown management.
 
 PulseManager tracks per-entity cooldowns using a two-level hash map keyed by entity ID and action type. It supports both simple time-based cooldowns and burst-limiting (N actions per time window). Designed for game servers but usable anywhere you need lightweight, in-process rate limiting.
@@ -109,6 +111,43 @@ using PM = pulse::PulseManager<MyEnum>;
 ## Thread Safety
 
 `Instance()` returns a `thread_local` singleton — each thread owns its own independent state. No mutex, no contention. If you need shared state across threads, use a single non-singleton instance with external synchronization.
+
+## Memory Management
+
+PulseManager uses `std::unordered_map` internally, which does not shrink on erase. To avoid memory growth in long-running servers:
+
+- **Call `Clear(entityID)` when an entity disconnects.** This is the most important rule. Without it, cooldown entries for departed players accumulate indefinitely.
+- **Call `Sweep()` periodically** (e.g. every 60 seconds) to evict all expired entries as a safety net.
+- **Call `ClearAll()`** on shutdown or when you want to fully reclaim memory.
+
+```cpp
+// On player disconnect
+PM::Instance().Clear(playerID);
+
+// Periodic cleanup (e.g. in a server tick)
+auto removed = PM::Instance().Sweep();
+```
+
+## Migrating from v1.x
+
+v2.0 is a breaking change. Key differences:
+
+| v1.x | v2.0 |
+|------|------|
+| `PulseManager::Instance()` | `pulse::PulseManager<ePulse>::Instance()` |
+| `ePulse` enum defined in header | You define your own enum |
+| `PULSEMANAGER_CLOCK_TO_SEC2(key, action)` | `pm.RemainingSeconds(key, action)` |
+| `high_resolution_clock` | `steady_clock` (monotonic) |
+| `#define __PULSEMANAGER__CLOCK_SUPPORT__` | Always enabled, no preprocessor flags |
+
+Minimal migration — add this to your project:
+
+```cpp
+enum class ePulse { GuildComment, CommandRequest, ItemDrop, /* ... */ };
+using PulseManager = pulse::PulseManager<ePulse>;
+```
+
+Existing call sites (`PulseManager::Instance().IncreaseClock(...)`) work unchanged after the alias.
 
 ## Building Tests
 
